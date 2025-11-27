@@ -10,7 +10,7 @@ on:
       release_name:
         description: 'Release name to simulate (e.g., component-v1.0.0)'
         required: true
-        default: 'iocd-v10.0.0'
+        default: 'iocd-v10.0.1'
       is_prerelease:
         description: 'Is this a prerelease?'
         required: true
