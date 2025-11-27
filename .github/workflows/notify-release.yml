@@ -1,0 +1,88 @@
+name: Notify Release
+
+on:
+  release:
+    types: [published]
+  
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: 'Release name to simulate (e.g., component-v1.0.0)'
+        required: true
+        default: 'iocd-v10.0.0'
+      is_prerelease:
+        description: 'Is this a prerelease?'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  notify-repositories:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract release information
+        id: release-info
+        run: |
+          # Use workflow_dispatch inputs if available, otherwise use release event data
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            RELEASE_NAME="${{ inputs.release_name }}"
+            IS_PRERELEASE="${{ inputs.is_prerelease }}"
+          else
+            RELEASE_NAME="${{ github.event.release.tag_name }}"
+            IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          fi
+          
+          # Extract component name (string before the first dash)
+          COMPONENT_NAME=$(echo "$RELEASE_NAME" | cut -d'-' -f1)
+          
+          # Extract version (between -v and the next dash, or end of string)
+          # Format: <component-name>-v<version>-<other>
+          VERSION=$(echo "$RELEASE_NAME" | sed -n 's/^[^-]*-v\([^-]*\).*/\1/p')
+          
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "component_name=$COMPONENT_NAME" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          
+          echo "Release Name: $RELEASE_NAME"
+          echo "Component Name: $COMPONENT_NAME"
+          echo "Version: $VERSION"
+          echo "Is Prerelease: $IS_PRERELEASE"
+
+      - name: Trigger workflows in other repositories
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.IOCD_SEED_COMPONENTS_WRITE }}
+          script: |
+            const releaseName = '${{ steps.release-info.outputs.release_name }}';
+            const componentName = '${{ steps.release-info.outputs.component_name }}';
+            const version = '${{ steps.release-info.outputs.version }}';
+            const isPrerelease = ${{ steps.release-info.outputs.is_prerelease }};
+            
+            // List of repositories to notify (add your repository names here)
+            const repositoriesToNotify = [
+              'iocd-seed'              
+            ];
+            
+            const owner = '${{ github.repository_owner }}';
+            
+            for (const repo of repositoriesToNotify) {
+              try {
+                await github.rest.repos.createDispatchEvent({
+                  owner: owner,
+                  repo: repo,
+                  event_type: 'component-release',
+                  client_payload: {
+                    release_name: releaseName,
+                    component_name: componentName,
+                    version: version,
+                    is_prerelease: isPrerelease,
+                    source_repo: '${{ github.repository }}'
+                  }
+                });
+                console.log(`Successfully notified ${repo}`);
+              } catch (error) {
+                console.error(`Failed to notify ${repo}: ${error.message}`);
+              }
+            }
