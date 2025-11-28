@@ -36,9 +36,9 @@ jobs:
           # Extract component name (string before the first dash)
           COMPONENT_NAME=$(echo "$RELEASE_NAME" | cut -d'-' -f1)
           
-          # Extract version (between -v and the next dash, or end of string)
-          # Format: <component-name>-v<version>-<other>
-          VERSION=$(echo "$RELEASE_NAME" | sed -n 's/^[^-]*-v\([^-]*\).*/\1/p')
+          # Extract version (everything after -v)
+          # Format: <component-name>-v<version> (e.g., iocd-v10.0.1-build.251127T2020 -> 10.0.1-build.251127T2020)
+          VERSION=$(echo "$RELEASE_NAME" | sed 's/^[^-]*-v//')
           
           echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
           echo "component_name=$COMPONENT_NAME" >> $GITHUB_OUTPUT
