@@ -10,12 +10,22 @@ on:
       release_name:
         description: 'Release name to simulate (e.g., component-v1.0.0)'
         required: true
-        default: 'iocd-v10.0.1'
+        default: 'iocd-v10.0.1-dev.260313T1423'
       is_prerelease:
         description: 'Is this a prerelease?'
         required: true
         type: boolean
         default: true
+      is_dev:
+        description: 'Is this a dev build?'
+        required: true
+        type: boolean
+        default: true
+      is_nightly:
+        description: 'Is this a nightly build?'
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   notify-repositories:
@@ -28,9 +38,25 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             RELEASE_NAME="${{ inputs.release_name }}"
             IS_PRERELEASE="${{ inputs.is_prerelease }}"
+            IS_DEV="${{ inputs.is_dev }}"
+            IS_NIGHTLY="${{ inputs.is_nightly }}"
           else
             RELEASE_NAME="${{ github.event.release.tag_name }}"
             IS_PRERELEASE="${{ github.event.release.prerelease }}"
+            
+            # Detect dev/nightly from version pattern
+            # -dev. = dev build, -nightly. = nightly build, -build. = pre-release or stable
+            if [[ "$RELEASE_NAME" == *"-dev."* ]]; then
+              IS_DEV="true"
+            else
+              IS_DEV="false"
+            fi
+            
+            if [[ "$RELEASE_NAME" == *"-nightly."* ]]; then
+              IS_NIGHTLY="true"
+            else
+              IS_NIGHTLY="false"
+            fi
           fi
           
           # Extract component name (string before the first dash)
@@ -40,15 +66,32 @@ jobs:
           # Format: <component-name>-v<version> (e.g., iocd-v10.0.1-build.251127T2020 -> 10.0.1-build.251127T2020)
           VERSION=$(echo "$RELEASE_NAME" | sed 's/^[^-]*-v//')
           
+          # Determine release type string
+          if [ "$IS_NIGHTLY" == "true" ]; then
+            RELEASE_TYPE="nightly"
+          elif [ "$IS_DEV" == "true" ]; then
+            RELEASE_TYPE="dev"
+          elif [ "$IS_PRERELEASE" == "true" ]; then
+            RELEASE_TYPE="pre-release"
+          else
+            RELEASE_TYPE="stable"
+          fi
+          
           echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
           echo "component_name=$COMPONENT_NAME" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "is_dev=$IS_DEV" >> $GITHUB_OUTPUT
+          echo "is_nightly=$IS_NIGHTLY" >> $GITHUB_OUTPUT
+          echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
           
-          echo "Release Name: $RELEASE_NAME"
-          echo "Component Name: $COMPONENT_NAME"
-          echo "Version: $VERSION"
-          echo "Is Prerelease: $IS_PRERELEASE"
+          echo "📦 Release Name: $RELEASE_NAME"
+          echo "🧩 Component Name: $COMPONENT_NAME"
+          echo "🏷️ Version: $VERSION"
+          echo "🎯 Release Type: $RELEASE_TYPE"
+          echo "  - Is Prerelease: $IS_PRERELEASE"
+          echo "  - Is Dev: $IS_DEV"
+          echo "  - Is Nightly: $IS_NIGHTLY"
 
       - name: Trigger workflows in other repositories
         uses: actions/github-script@v7
@@ -58,7 +101,10 @@ jobs:
             const releaseName = '${{ steps.release-info.outputs.release_name }}';
             const componentName = '${{ steps.release-info.outputs.component_name }}';
             const version = '${{ steps.release-info.outputs.version }}';
+            const releaseType = '${{ steps.release-info.outputs.release_type }}';
             const isPrerelease = ${{ steps.release-info.outputs.is_prerelease }};
+            const isDev = ${{ steps.release-info.outputs.is_dev }};
+            const isNightly = ${{ steps.release-info.outputs.is_nightly }};
             
             // List of repositories to notify (add your repository names here)
             const repositoriesToNotify = [
@@ -77,12 +123,15 @@ jobs:
                     release_name: releaseName,
                     component_name: componentName,
                     version: version,
+                    release_type: releaseType,
                     is_prerelease: isPrerelease,
+                    is_dev: isDev,
+                    is_nightly: isNightly,
                     source_repo: '${{ github.repository }}'
                   }
                 });
-                console.log(`Successfully notified ${repo}`);
+                console.log(`✅ Successfully notified ${repo} (${releaseType})`);
               } catch (error) {
-                console.error(`Failed to notify ${repo}: ${error.message}`);
+                console.error(`❌ Failed to notify ${repo}: ${error.message}`);
               }
             }
