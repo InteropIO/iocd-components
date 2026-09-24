@@ -106,8 +106,9 @@ jobs:
           script: |
             // The marker is in the release body, which is available in the
             // published event before release asset uploads have necessarily finished.
-            // Older releases have no marker; retain their existing seed signing behavior.
-            let signWindows = true;
+            // Older dev/nightly releases have no marker and their seed branch
+            // configs disable signing. Preserve that behavior unless explicitly opted in.
+            let signWindows = !['dev', 'nightly'].includes(process.env.RELEASE_TYPE);
             if (context.eventName === 'workflow_dispatch') {
               const input = context.payload.inputs.sign_windows;
               signWindows = input === true || input === 'true';
