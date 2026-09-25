@@ -21,6 +21,10 @@ on:
         required: true
         type: boolean
         default: true
+      sign_windows:
+        description: 'Sign Windows dependencies and the seed executable (stable always signs)'
+        type: boolean
+        default: false
       is_nightly:
         description: 'Is this a nightly build?'
         required: true
@@ -93,6 +97,29 @@ jobs:
           echo "  - Is Dev: $IS_DEV"
           echo "  - Is Nightly: $IS_NIGHTLY"
 
+      - name: Resolve Windows signing
+        id: signing
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TYPE: ${{ steps.release-info.outputs.release_type }}
+        with:
+          script: |
+            // The marker is in the release body, which is available in the
+            // published event before release asset uploads have necessarily finished.
+            // Older dev/nightly releases have no marker and their seed branch
+            // configs disable signing. Preserve that behavior unless explicitly opted in.
+            let signWindows = !['dev', 'nightly'].includes(process.env.RELEASE_TYPE);
+            if (context.eventName === 'workflow_dispatch') {
+              const input = context.payload.inputs.sign_windows;
+              signWindows = input === true || input === 'true';
+            } else {
+              const marker = (context.payload.release.body || '').match(/^<!-- iocd-sign-windows: (true|false) -->\r?$/m);
+              if (marker) signWindows = marker[1] === 'true';
+            }
+            if (process.env.RELEASE_TYPE === 'stable') signWindows = true;
+            core.setOutput('sign_windows', signWindows);
+            core.info(`Windows signing requested: ${signWindows}`);
+
       - name: Trigger workflows in other repositories
         uses: actions/github-script@v7
         with:
@@ -105,6 +132,7 @@ jobs:
             const isPrerelease = ${{ steps.release-info.outputs.is_prerelease }};
             const isDev = ${{ steps.release-info.outputs.is_dev }};
             const isNightly = ${{ steps.release-info.outputs.is_nightly }};
+            const signWindows = ${{ steps.signing.outputs.sign_windows }};
             
             // List of repositories to notify (add your repository names here)
             const repositoriesToNotify = [
@@ -127,6 +155,7 @@ jobs:
                     is_prerelease: isPrerelease,
                     is_dev: isDev,
                     is_nightly: isNightly,
+                    sign_windows: signWindows,
                     source_repo: '${{ github.repository }}'
                   }
                 });
