@@ -22,7 +22,7 @@ on:
         type: boolean
         default: true
       sign_windows:
-        description: 'Sign Windows dependencies and the seed executable (stable always signs)'
+        description: 'Sign Windows dependencies and the seed executable (stable always on; nightly always off)'
         type: boolean
         default: false
       is_nightly:
@@ -106,8 +106,8 @@ jobs:
           script: |
             // The marker is in the release body, which is available in the
             // published event before release asset uploads have necessarily finished.
-            // Older dev/nightly releases have no marker and their seed branch
-            // configs disable signing. Preserve that behavior unless explicitly opted in.
+            // Older dev releases without a marker remain unsigned. Stable and
+            // nightly enforce their signing policy regardless of the input.
             let signWindows = !['dev', 'nightly'].includes(process.env.RELEASE_TYPE);
             if (context.eventName === 'workflow_dispatch') {
               const input = context.payload.inputs.sign_windows;
@@ -117,6 +117,7 @@ jobs:
               if (marker) signWindows = marker[1] === 'true';
             }
             if (process.env.RELEASE_TYPE === 'stable') signWindows = true;
+            if (process.env.RELEASE_TYPE === 'nightly') signWindows = false;
             core.setOutput('sign_windows', signWindows);
             core.info(`Windows signing requested: ${signWindows}`);
 
