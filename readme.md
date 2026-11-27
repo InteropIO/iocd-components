@@ -1,4 +1,39 @@
 
+# Release notifications
+
+The `Notify Release` workflow sends a `component-release` repository dispatch to
+`InteropIO/iocd-seed`. The seed workflow handles Desktop (`iocd`) releases by
+updating the appropriate release branch and starting its installer build.
+
+Notifications use the organization's `iocd-release-bot` GitHub App. Each run
+creates an installation token restricted to `iocd-seed` with **Contents: write**,
+the permission required by GitHub's repository dispatch API. The token expires
+after one hour and the token action revokes it when the job finishes. The App's
+private key does not have a scheduled expiry, so no personal access token needs
+periodic renewal.
+
+Before enabling this workflow:
+
+1. Include `InteropIO/iocd-seed` in the `iocd-release-bot` installation's selected
+   repositories. The App already has **Contents: write** permission.
+2. Set the `RELEASE_APP_CLIENT_ID` Actions variable in `iocd-components` to the
+   App's client ID (`Iv23li7TVIHiXMyFLzsp`).
+3. Store an App private key in the `RELEASE_APP_PRIVATE_KEY` Actions secret in
+   `iocd-components`. Keep the key out of source control and logs. The workflow's
+   token scope does not limit the private key itself: it can mint tokens for
+   other repositories available to this App installation.
+
+To verify the migration without starting an installer build, manually run
+`Notify Release` with release name `notificationtest-v0.0.0`, `is_dev=true`,
+`is_prerelease=true`, `is_nightly=false`, and `sign_windows=false`. Confirm that
+token creation and dispatch succeed and that the seed receiver skips its
+`update-iocd` job because this is not an `iocd` component. Then confirm the next
+real Desktop release starts its seed build. Notification failures now fail the
+workflow instead of leaving a successful run with only an error in its log.
+
+After verification, remove the unused `IOCD_SEED_COMPONENTS_WRITE` secret and
+revoke the old PAT. Do not remove it before the App configuration is ready.
+
 # Component Naming Conventions
 
 ## Asset Filename Formats
